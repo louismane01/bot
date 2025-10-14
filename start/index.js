@@ -90,6 +90,136 @@ const cleanupExpiredSessions = () => {
 
 setInterval(cleanupExpiredSessions, 60 * 1000);
 
+// ==================== BOT PROCESS KEEP-ALIVE ====================
+function keepBotsAlive() {
+  console.log(chalk.blue('🤖 Starting bot keep-alive monitor...'));
+  
+  setInterval(() => {
+    const now = Date.now();
+    let restarted = 0;
+    let checked = 0;
+    
+    for (const [sessionId, session] of userSessions.entries()) {
+      checked++;
+      
+      // Skip if session is not supposed to have a bot
+      if (!session.isConnected || !session.botProcessStarted) continue;
+      
+      const botProcess = activeBotProcesses.get(sessionId);
+      const botUptime = now - session.botStartedAt;
+      
+      // Case 1: Process is completely dead but session says bot was connected
+      if (!botProcess && session.botConnected) {
+        console.log(chalk.yellow(`🔄 Restarting dead bot process: ${sessionId}`));
+        startBotProcess(sessionId, session.sessionName);
+        restarted++;
+      }
+      // Case 2: Process exists but bot never connected within 2 minutes (stuck)
+      else if (botProcess && !session.botConnected && botUptime > 120000) {
+        console.log(chalk.yellow(`🔄 Restarting stuck bot process: ${sessionId} (${Math.round(botUptime/1000)}s)`));
+        botProcess.kill();
+        setTimeout(() => startBotProcess(sessionId, session.sessionName), 2000);
+        restarted++;
+      }
+      // Case 3: Process exists but was connected and now disconnected
+      else if (botProcess && session.botConnected === false && session.botWasConnected) {
+        console.log(chalk.yellow(`🔄 Restarting disconnected bot: ${sessionId}`));
+        botProcess.kill();
+        setTimeout(() => startBotProcess(sessionId, session.sessionName), 2000);
+        restarted++;
+      }
+    }
+    
+    if (restarted > 0) {
+      console.log(chalk.green(`✅ Restarted ${restarted}/${checked} bot processes`));
+    } else if (checked > 0) {
+      console.log(chalk.gray(`📊 Bot monitor: ${checked} bots checked, all healthy`));
+    }
+  }, 60000); // Check every minute
+}
+
+// ==================== UPTIME MONITORING ====================
+class UptimeMonitor {
+  constructor() {
+    this.appUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+    this.isMonitoring = false;
+  }
+
+  start() {
+    if (this.isMonitoring) return;
+    
+    console.log(chalk.blue(`🔔 Starting uptime monitor for: ${this.appUrl}`));
+    
+    // Ping immediately
+    this.ping();
+    
+    // Ping every 4 minutes (less than 5-minute timeout)
+    this.interval = setInterval(() => this.ping(), 4 * 60 * 1000);
+    
+    this.isMonitoring = true;
+  }
+
+  stop() {
+    if (this.interval) {
+      clearInterval(this.interval);
+      this.isMonitoring = false;
+      console.log(chalk.yellow('🔔 Uptime monitor stopped'));
+    }
+  }
+
+  async ping() {
+    try {
+      const endpoints = ['/api/health', '/api/stats', '/'];
+      
+      for (const endpoint of endpoints) {
+        try {
+          const response = await fetch(`${this.appUrl}${endpoint}`, {
+            signal: AbortSignal.timeout(10000) // 10 second timeout
+          });
+          console.log(chalk.green(`✅ Ping ${endpoint}: ${response.status}`));
+        } catch (error) {
+          console.log(chalk.yellow(`⚠️ Ping ${endpoint} failed: ${error.message}`));
+        }
+        
+        // Small delay between pings
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    } catch (error) {
+      console.log(chalk.red(`❌ Uptime monitor error: ${error.message}`));
+    }
+  }
+}
+
+// Initialize monitor
+const uptimeMonitor = new UptimeMonitor();
+
+// ==================== HEALTH ENDPOINTS ====================
+app.get('/api/health', (req, res) => {
+  const activeSessions = Array.from(userSessions.values()).filter(
+    session => Date.now() - session.createdAt < PENDING_EXPIRY
+  );
+
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    activeSessions: activeSessions.length,
+    connectedSessions: activeSessions.filter(s => s.isConnected).length,
+    activeBots: activeBotProcesses.size,
+    totalUsers: totalUsers,
+    codesGenerated: totalCodesGenerated
+  });
+});
+
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Icey-MD Bot Server is running',
+    version: '1.0.0',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Function to export credentials as session string
 function exportSessionString(creds) {
   try {
@@ -242,6 +372,10 @@ async function startBotProcess(sessionId, sessionName) {
       session.botProcessStarted = true;
       session.botStartedAt = Date.now();
       session.botConnected = false;
+      // Track if bot was ever connected
+      if (!session.botWasConnected) {
+        session.botWasConnected = false;
+      }
     }
 
     // Handle process output
@@ -254,6 +388,7 @@ async function startBotProcess(sessionId, sessionName) {
         if (output.includes('Connected') || output.includes('CONNECTION SUCCESSFUL') || output.includes('ready')) {
           if (session) {
             session.botConnected = true;
+            session.botWasConnected = true; // Mark as previously connected
           }
           updateSocketStats();
           
@@ -297,9 +432,9 @@ async function startBotProcess(sessionId, sessionName) {
       });
 
       // Auto-restart for unexpected exits
-      if (code !== 0 && session) {
+      if (code !== 0 && session && session.isConnected) {
         console.log(chalk.blue(`🔄 Auto-restarting bot for ${sessionId} in 10 seconds...`));
-        setTimeout(() => startBotProcess(sessionId, sessionName), 10000);
+        setTimeout(() => startBotProcess(sessionId, session.sessionName), 10000);
       }
     });
 
@@ -331,6 +466,68 @@ async function startBotProcess(sessionId, sessionName) {
     }
     
     updateSocketStats();
+  }
+}
+
+// ==================== AUTO-START EXISTING SESSIONS ====================
+async function autoStartExistingSessions() {
+  console.log(chalk.blue('🔍 Scanning for existing sessions to auto-start...'));
+  
+  const sessionsDir = getSessionsFolderPath();
+  if (!fs.existsSync(sessionsDir)) {
+    console.log(chalk.yellow('📁 No sessions directory found'));
+    return;
+  }
+  
+  try {
+    const sessionFolders = fs.readdirSync(sessionsDir).filter(folder => {
+      const folderPath = path.join(sessionsDir, folder);
+      return fs.statSync(folderPath).isDirectory();
+    });
+    
+    console.log(chalk.blue(`📁 Found ${sessionFolders.length} existing session folders`));
+    
+    for (const sessionId of sessionFolders) {
+      try {
+        const sessionFolder = path.join(sessionsDir, sessionId);
+        const credsFile = path.join(sessionFolder, 'creds.json');
+        
+        if (fs.existsSync(credsFile)) {
+          console.log(chalk.blue(`🔄 Auto-starting existing session: ${sessionId}`));
+          
+          // Create session entry if it doesn't exist
+          if (!userSessions.has(sessionId)) {
+            userSessions.set(sessionId, {
+              number: 'auto-started',
+              sessionId,
+              sessionName: generateSessionName(sessionId),
+              createdAt: Date.now(),
+              isProcessed: true,
+              pairingCode: null,
+              codeGeneratedAt: null,
+              sessionString: null,
+              isConnected: true, // Mark as connected since we have session data
+              botConnected: false,
+              botProcessStarted: false,
+              botWasConnected: true, // Assume it was connected before
+              status: 'auto_started',
+              authDir: sessionFolder,
+              connectionAttempts: 0,
+              maxConnectionAttempts: 3
+            });
+          }
+          
+          // Start bot process for this session
+          await startBotProcess(sessionId, generateSessionName(sessionId));
+        }
+      } catch (error) {
+        console.error(chalk.red(`❌ Failed to auto-start session ${sessionId}:`), error);
+      }
+    }
+    
+    console.log(chalk.green(`✅ Auto-started ${sessionFolders.length} existing sessions`));
+  } catch (error) {
+    console.error(chalk.red('❌ Error scanning sessions directory:'), error);
   }
 }
 
@@ -370,6 +567,7 @@ app.post('/api/number', async (req, res) => {
     isConnected: false,
     botConnected: false,
     botProcessStarted: false,
+    botWasConnected: false,
     status: 'waiting',
     authDir: path.join(__dirname, `auth_info_${sessionId}`),
     connectionAttempts: 0,
@@ -954,8 +1152,8 @@ function ensureBotFolderStructure() {
   return true;
 }
 
-// Start server
-server.listen(PORT, () => {
+// ==================== START SERVER WITH ALL MONITORS ====================
+server.listen(PORT, async () => {
   console.log(chalk.green(`🚀 Icey_MD Multi-Session Server started!`));
   console.log(chalk.blue(`🌐 Web interface: http://localhost:${PORT}`));
   console.log(chalk.blue(`🔌 Socket.io server running`));
@@ -966,10 +1164,28 @@ server.listen(PORT, () => {
   if (!structureOk) {
     console.log(chalk.red('❌ Please check your folder structure and try again'));
   }
+  
+  // ==================== START ALL MONITORS ====================
+  // Auto-start existing sessions first
+  await autoStartExistingSessions();
+  
+  // Start bot keep-alive monitor
+  keepBotsAlive();
+  
+  // Start uptime monitor (only on Render)
+  if (process.env.RENDER || process.env.RENDER_EXTERNAL_URL) {
+    console.log(chalk.blue('🚀 Render environment detected - starting uptime monitor'));
+    setTimeout(() => uptimeMonitor.start(), 30000);
+  }
+  
+  console.log(chalk.green('✅ All monitors started successfully!'));
 });
 
 process.on('SIGINT', async () => {
   console.log('\n🛑 Shutting down gracefully...');
+  
+  // Stop uptime monitor
+  uptimeMonitor.stop();
   
   for (const [sessionId, process] of activeBotProcesses.entries()) {
     try {
