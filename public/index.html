@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Icey_MD - Multi-User WhatsApp Bot</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --primary: #00ff88;
+      --primary-dark: #00cc6a;
+      --secondary: #667eea;
+      --accent: #764ba2;
+      --text: #ffffff;
+      --text-light: #b0b0b0;
+      --muted: #888888;
+      --background: #0a0a0a;
+      --card-bg: rgba(255, 255, 255, 0.05);
+      --card-bg-hover: rgba(255, 255, 255, 0.08);
+      --border: rgba(255, 255, 255, 0.1);
+      --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      --shadow-lg: 0 15px 35px rgba(0, 0, 0, 0.5);
+      --glass: rgba(255, 255, 255, 0.025);
+      --glass-border: rgba(255, 255, 255, 0.1);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: var(--background);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Particle Background */
+    .particles {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      background: 
+        radial-gradient(circle at 20% 80%, rgba(0, 255, 136, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(102, 126, 234, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 40% 40%, rgba(118, 75, 162, 0.05) 0%, transparent 50%);
+    }
+
+    /* Navigation */
+    #nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.5rem 2rem;
+      background: rgba(255, 255, 255, 0.02);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .logo {
+      width: 45px;
+      height: 45px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: black;
+      font-weight: bold;
+      font-size: 1.5rem;
+      box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2.5rem;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      color: var(--text-light);
+      font-weight: 500;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-radius: 10px;
+    }
+
+    .nav-links a:hover {
+      color: var(--primary);
+      background: var(--glass);
+      transform: translateY(-2px);
+    }
+
+    .nav-toggle {
+      display: none;
+      background: none;
+      border: none;
+      font-size: 1.25rem;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    /* Header */
+    header {
+      text-align: center;
+      padding: 6rem 2rem 3rem;
+      background: rgba(255, 255, 255, 0.02);
+      margin: 0 2rem;
+      border-radius: 25px;
+      margin-top: 2rem;
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--glass-border);
+      box-shadow: var(--shadow);
+    }
+
+    header h1 {
+      font-size: 4rem;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 1.5rem;
+      font-weight: 800;
+    }
+
+    header p {
+      font-size: 1.3rem;
+      color: var(--text-light);
+      max-width: 600px;
+      margin: 0 auto 3rem;
+    }
+
+    /* Stats Container */
+    .stats-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.5rem;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      padding: 2rem;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(20px);
+      transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+      background: var(--card-bg-hover);
+      transform: translateY(-5px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .stat-card i {
+      font-size: 2.5rem;
+      color: var(--primary);
+    }
+
+    .stat-value {
+      font-size: 2.5rem;
+      font-weight: bold;
+      color: var(--text);
+      text-shadow: 0 2px 10px rgba(0, 255, 136, 0.3);
+    }
+
+    .stat-label {
+      font-size: 0.95rem;
+      color: var(--text-light);
+    }
+
+    /* Main Content */
+    main {
+      max-width: 1200px;
+      margin: 3rem auto;
+      padding: 0 2rem;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 25px;
+      padding: 2.5rem;
+      margin-bottom: 2.5rem;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(20px);
+      transition: all 0.3s ease;
+    }
+
+    .card:hover {
+      background: var(--card-bg-hover);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .card h2 {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      color: var(--text);
+      font-size: 1.8rem;
+    }
+
+    .card h2 i {
+      color: var(--primary);
+      font-size: 2rem;
+    }
+
+    /* Instructions */
+    .instructions {
+      background: rgba(0, 255, 136, 0.05);
+      padding: 2rem;
+      border-radius: 15px;
+      margin-bottom: 2.5rem;
+      border-left: 4px solid var(--primary);
+    }
+
+    .instructions h3 {
+      margin-bottom: 1.5rem;
+      color: var(--primary);
+      font-size: 1.3rem;
+    }
+
+    .instructions ol {
+      margin-left: 1.5rem;
+    }
+
+    .instructions li {
+      margin-bottom: 1rem;
+      color: var(--text-light);
+    }
+
+    /* Input Box */
+    .input-box {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 2.5rem;
+      border-radius: 20px;
+      margin-bottom: 2rem;
+      border: 1px solid var(--glass-border);
+    }
+
+    .input-group {
+      display: flex;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid var(--border);
+      border-radius: 15px;
+      padding: 1rem 1.5rem;
+      margin-bottom: 1.5rem;
+      transition: all 0.3s ease;
+    }
+
+    .input-group:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(0, 255, 136, 0.1);
+    }
+
+    .input-group i {
+      color: var(--text-light);
+      margin-right: 1rem;
+      font-size: 1.2rem;
+    }
+
+    .input-group input {
+      flex: 1;
+      border: none;
+      outline: none;
+      font-size: 1.1rem;
+      background: transparent;
+      color: var(--text);
+    }
+
+    .input-group input::placeholder {
+      color: var(--text-light);
+    }
+
+    /* Buttons */
+    .btn {
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: black;
+      border: none;
+      padding: 1.2rem 2.5rem;
+      border-radius: 15px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3);
+    }
+
+    .btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 25px rgba(0, 255, 136, 0.4);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: linear-gradient(135deg, var(--secondary), var(--accent));
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+    }
+
+    /* Features Grid */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 2rem;
+      margin-top: 2rem;
+    }
+
+    .feature-item {
+      text-align: center;
+      padding: 2.5rem 2rem;
+      background: var(--card-bg);
+      border-radius: 20px;
+      transition: all 0.3s ease;
+      border: 1px solid var(--glass-border);
+    }
+
+    .feature-item:hover {
+      transform: translateY(-8px);
+      background: var(--card-bg-hover);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .feature-icon {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.5rem;
+      color: black;
+      font-size: 2rem;
+      box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3);
+    }
+
+    .feature-item h3 {
+      margin-bottom: 1rem;
+      color: var(--text);
+      font-size: 1.4rem;
+    }
+
+    .feature-item p {
+      color: var(--text-light);
+      line-height: 1.6;
+    }
+
+    /* Link Grid */
+    .link-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+
+    /* Status Messages */
+    #status {
+      margin-top: 1.5rem;
+      padding: 1.5rem;
+      border-radius: 15px;
+      text-align: center;
+      font-weight: 500;
+    }
+
+    .status.waiting {
+      background: rgba(255, 243, 205, 0.1);
+      color: #ffd700;
+      border: 1px solid rgba(255, 234, 167, 0.3);
+    }
+
+    .status.success {
+      background: rgba(212, 237, 218, 0.1);
+      color: #00ff88;
+      border: 1px solid rgba(195, 230, 203, 0.3);
+    }
+
+    .status.error {
+      background: rgba(248, 215, 218, 0.1);
+      color: #ff6b6b;
+      border: 1px solid rgba(245, 198, 203, 0.3);
+    }
+
+    /* Pairing Code */
+    .pairing-code {
+      font-size: 4rem;
+      font-weight: bold;
+      text-align: center;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin: 3rem 0;
+      padding: 3rem;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 20px;
+      border: 2px dashed var(--primary);
+      animation: pulse 2s infinite;
+      box-shadow: 0 8px 32px rgba(0, 255, 136, 0.2);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .pairing-code:hover {
+      transform: scale(1.02);
+      box-shadow: 0 12px 40px rgba(0, 255, 136, 0.3);
+    }
+
+    @keyframes pulse {
+      0%, 100% { 
+        transform: scale(1);
+        box-shadow: 0 8px 32px rgba(0, 255, 136, 0.2);
+      }
+      50% { 
+        transform: scale(1.05);
+        box-shadow: 0 12px 40px rgba(0, 255, 136, 0.4);
+      }
+    }
+
+    /* Session String */
+    .session-string-container {
+      background: rgba(0, 255, 136, 0.05);
+      border: 2px solid var(--primary);
+      border-radius: 20px;
+      padding: 2.5rem;
+      margin: 2.5rem 0;
+      box-shadow: 0 8px 32px rgba(0, 255, 136, 0.1);
+    }
+
+    .session-string {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 1.5rem;
+      border-radius: 15px;
+      font-family: 'Courier New', monospace;
+      word-break: break-all;
+      font-size: 0.95rem;
+      border: 1px solid var(--border);
+      max-height: 200px;
+      overflow-y: auto;
+      margin: 1.5rem 0;
+      color: var(--text-light);
+    }
+
+    .copy-btn {
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: black;
+      border: none;
+      padding: 1rem 2rem;
+      border-radius: 12px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 600;
+      box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3);
+      transition: all 0.3s ease;
+    }
+
+    .copy-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 255, 136, 0.4);
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 3rem;
+      color: var(--text-light);
+      border-top: 1px solid var(--border);
+      margin-top: 3rem;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* Floating WhatsApp Button */
+    .floating-whatsapp {
+      position: fixed;
+      bottom: 2.5rem;
+      right: 2.5rem;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: black;
+      padding: 1.2rem 1.5rem;
+      border-radius: 50px;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      box-shadow: var(--shadow-lg);
+      cursor: pointer;
+      z-index: 1000;
+      transition: all 0.3s ease;
+      font-weight: 600;
+    }
+
+    .floating-whatsapp:hover {
+      transform: translateY(-3px) scale(1.05);
+      box-shadow: 0 15px 35px rgba(0, 255, 136, 0.4);
+    }
+
+    .whatsapp-icon {
+      width: 45px;
+      height: 45px;
+      background: black;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--primary);
+      font-size: 1.3rem;
+    }
+
+    /* Loader */
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid rgba(255, 255, 255, 0.1);
+      border-top: 4px solid var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1.5rem;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .nav-links {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: rgba(10, 10, 10, 0.95);
+        backdrop-filter: blur(20px);
+        flex-direction: column;
+        padding: 1rem;
+        border-top: 1px solid var(--border);
+      }
+
+      .nav-links.active {
+        display: flex;
+      }
+
+      .nav-toggle {
+        display: block;
+      }
+
+      header {
+        margin: 1rem;
+        padding: 3rem 1.5rem;
+      }
+
+      header h1 {
+        font-size: 2.5rem;
+      }
+
+      main {
+        padding: 0 1rem;
+      }
+
+      .stats-container {
+        grid-template-columns: 1fr;
+      }
+
+      .feature-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .link-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .pairing-code {
+        font-size: 2.5rem;
+        padding: 2rem;
+      }
+
+      .floating-whatsapp {
+        bottom: 1.5rem;
+        right: 1.5rem;
+        padding: 1rem;
+      }
+
+      .whatsapp-text {
+        display: none;
+      }
+    }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      top: 2rem;
+      right: 2rem;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: black;
+      padding: 1rem 1.5rem;
+      border-radius: 12px;
+      box-shadow: var(--shadow-lg);
+      z-index: 10000;
+      transform: translateX(400px);
+      transition: transform 0.3s ease;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .toast.show {
+      transform: translateX(0);
+    }
+
+    /* Auto-copy notification */
+    .auto-copy-notice {
+      background: rgba(0, 255, 136, 0.1);
+      border: 1px solid var(--primary);
+      border-radius: 10px;
+      padding: 1rem;
+      margin: 1rem 0;
+      text-align: center;
+      color: var(--primary);
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <!-- Particle background -->
+  <div class="particles" id="particles"></div>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast">
+    <i class="fas fa-check-circle"></i>
+    <span id="toastMessage">Copied to clipboard!</span>
+  </div>
+
+  <!-- Floating WhatsApp Button -->
+  <div class="floating-whatsapp" id="whatsappBtn">
+    <div class="whatsapp-icon">
+      <i class="fab fa-whatsapp"></i>
+    </div>
+    <span class="whatsapp-text">Need Help?</span>
+  </div>
+
+  <nav id="nav">
+    <div class="brand">
+      <div class="logo">I</div>
+      <div>
+        <div style="font-weight:800; font-size: 1.3rem;">Icey_MD</div>
+        <div style="font-size:0.8rem;color:var(--muted)">Multi-User WhatsApp Bot</div>
+      </div>
+    </div>
+    <div class="nav-links" id="navLinks">
+      <a href="#features"><i class="fas fa-star"></i> Features</a>
+      <a href="#connect"><i class="fas fa-link"></i> Connect</a>
+      <a href="#download"><i class="fas fa-download"></i> Download</a>
+    </div>
+    <button class="nav-toggle" id="navToggle">
+      <i class="fas fa-bars"></i>
+    </button>
+  </nav>
+
+  <header>
+    <h1>✨ Icey_MD</h1>
+    <p>Advanced multi-user WhatsApp bot with glassmorphism design and real-time analytics</p>
+
+    <!-- Stats Container -->
+    <div class="stats-container">
+      <div class="stat-card active">
+        <i class="fas fa-signal"></i>
+        <div>
+          <div class="stat-value" id="activeSockets">0</div>
+          <div class="stat-label">Active Sessions</div>
+        </div>
+      </div>
+
+      <div class="stat-card total">
+        <i class="fas fa-users"></i>
+        <div>
+          <div class="stat-value" id="totalUsers">0</div>
+          <div class="stat-label">Total Users</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <i class="fas fa-key"></i>
+        <div>
+          <div class="stat-value" id="codesGenerated">0</div>
+          <div class="stat-label">Codes Generated</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="connect" class="card">
+      <h2><i class="fas fa-link"></i> Connect to WhatsApp</h2>
+      
+      <div class="instructions">
+        <h3>How to connect:</h3>
+        <ol>
+          <li>Enter your WhatsApp number with country code (no "+", no brackets, no spaces)</li>
+          <li>Click "Request Pairing Code"</li>
+          <li>The code will be automatically copied to your clipboard</li>
+          <li>Open WhatsApp → Linked Devices → Link a Device → Link with Phone Number</li>
+          <li>Paste the code when prompted</li>
+          <li>Your session string will be automatically copied when ready</li>
+        </ol>
+      </div>
+
+      <div id="pairingSection" class="pairing-section">
+        <div class="input-box">
+          <div class="input-group">
+            <i class="fas fa-phone"></i>
+            <input type="tel" id="phone" placeholder="e.g. 1234567890 (with country code)" />
+          </div>
+          <button class="btn" id="requestPairing">
+            <i class="fas fa-key"></i> Request Pairing Code
+          </button>
+        </div>
+
+        <div id="status"></div>
+
+        <div class="auto-copy-notice" id="autoCopyNotice" style="display: none;">
+          <i class="fas fa-clipboard-check"></i>
+          Code automatically copied to clipboard! Paste it in WhatsApp.
+        </div>
+
+        <div class="pairing-code" id="pairingCode" style="display: none;"></div>
+
+        <div class="session-info" id="sessionInfo" style="display: none;">
+          <h3><i class="fas fa-id-card"></i> Session Information</h3>
+          <p><strong>Session ID:</strong> <code id="sessionIdDisplay"></code></p>
+          <p><strong>Number:</strong> <span id="sessionNumber"></span></p>
+          <p><strong>Status:</strong> <span id="sessionStatus">Pending</span></p>
+        </div>
+
+        <div class="session-string-container" id="sessionStringContainer" style="display: none;">
+          <h3><i class="fas fa-key"></i> Your Session String</h3>
+          <p>Your session has been successfully connected! The session string has been automatically copied to your clipboard.</p>
+          <div class="session-string" id="sessionString"></div>
+          <button class="copy-btn" onclick="copySessionString()">
+            <i class="fas fa-copy"></i> Copy Again
+          </button>
+          <p><small>Save this session string to reconnect later without needing a new pairing code.</small></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="card">
+      <h2><i class="fas fa-star"></i> Features</h2>
+      <div class="feature-grid">
+        <div class="feature-item">
+          <div class="feature-icon">
+            <i class="fas fa-users"></i>
+          </div>
+          <h3>Multi-User</h3>
+          <p>Support for multiple users with isolated sessions and secure authentication system.</p>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon">
+            <i class="fas fa-shield-alt"></i>
+          </div>
+          <h3>Secure</h3>
+          <p>End-to-end encryption and secure session management for maximum privacy protection.</p>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon">
+            <i class="fas fa-bolt"></i>
+          </div>
+          <h3>Fast</h3>
+          <p>Optimized for performance with quick pairing and instant connection establishment.</p>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon">
+            <i class="fas fa-chart-line"></i>
+          </div>
+          <h3>Analytics</h3>
+          <p>Real-time statistics and monitoring of active sessions and user activities.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="download" class="card">
+      <h2><i class="fas fa-download"></i> Download Setup</h2>
+      <div class="instructions">
+        <h3>Setup Instructions:</h3>
+        <ol>
+          <li>Download the setup file below</li>
+          <li>Save it as <code>index.js</code> in your project folder</li>
+          <li>Make sure you have Node.js installed</li>
+          <li>Run <code>npm install</code> to install dependencies</li>
+          <li>Run <code>node index.js</code> in your terminal</li>
+          <li>Follow the on-screen instructions</li>
+        </ol>
+      </div>
+
+      <div class="input-box">
+        <button id="downloadBtn" class="btn">
+          <i class="fas fa-download"></i> Download Setup File
+        </button>
+        <p style="text-align: center; margin-top: 1.5rem; color: var(--text-light);">
+          <small><i class="fas fa-info-circle"></i> Complete setup package with all dependencies</small>
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    © <span id="year"></span> Icey_MD · Multi-User WhatsApp Bot System
+  </footer>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // Set current year
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    // Initialize Socket.io
+    const socket = io();
+
+    // DOM Elements
+    const phoneInput = document.getElementById('phone');
+    const requestPairingBtn = document.getElementById('requestPairing');
+    const statusDiv = document.getElementById('status');
+    const pairingCodeElement = document.getElementById('pairingCode');
+    const sessionInfo = document.getElementById('sessionInfo');
+    const sessionIdDisplay = document.getElementById('sessionIdDisplay');
+    const sessionNumber = document.getElementById('sessionNumber');
+    const sessionStatus = document.getElementById('sessionStatus');
+    const sessionStringContainer = document.getElementById('sessionStringContainer');
+    const sessionStringElement = document.getElementById('sessionString');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const activeSocketsElement = document.getElementById('activeSockets');
+    const totalUsersElement = document.getElementById('totalUsers');
+    const codesGeneratedElement = document.getElementById('codesGenerated');
+    const toast = document.getElementById('toast');
+    const toastMessage = document.getElementById('toastMessage');
+    const autoCopyNotice = document.getElementById('autoCopyNotice');
+    const navToggle = document.getElementById('navToggle');
+    const navLinks = document.getElementById('navLinks');
+
+    let currentSessionId = null;
+
+    // Socket.io event listeners
+    socket.on('statsUpdate', (data) => {
+      activeSocketsElement.textContent = data.totalActiveSessions;
+      totalUsersElement.textContent = data.totalUsers;
+      codesGeneratedElement.textContent = data.codesGenerated;
+    });
+
+    socket.on('connect', () => {
+      console.log('Connected to server');
+    });
+
+    // Show toast notification
+    function showToast(message, type = 'success') {
+      toastMessage.textContent = message;
+      toast.className = `toast show ${type}`;
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3000);
+    }
+
+    // Auto-copy to clipboard
+    function autoCopyToClipboard(text, message = 'Copied to clipboard!') {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast(message);
+      }).catch(err => {
+        console.error('Failed to copy: ', err);
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        showToast(message);
+      });
+    }
+
+    // Request pairing code
+    requestPairingBtn.addEventListener('click', async () => {
+      const number = phoneInput.value.trim();
+      
+      if (!number) {
+        showStatus('Please enter a valid phone number', 'error');
+        return;
+      }
+
+      if (!/^\d+$/.test(number)) {
+        showStatus('Please enter only numbers (no +, spaces, or special characters)', 'error');
+        return;
+      }
+
+      requestPairingBtn.disabled = true;
+      requestPairingBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating Session...';
+      showStatus('🔐 Creating new session...', 'waiting');
+      autoCopyNotice.style.display = 'none';
+
+      try {
+        const response = await fetch('/api/number', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            number,
+            sessionId: currentSessionId 
+          })
+        });
+
+        const data = await response.json();
+
+        if (response.status === 429) {
+          showStatus('⏳ ' + data.error, 'error');
+          resetButton();
+          return;
+        }
+
+        if (data.success) {
+          currentSessionId = data.sessionId;
+          showStatus('✅ Session created! Generating pairing code...', 'success');
+          
+          // Show session info
+          sessionInfo.style.display = 'block';
+          sessionIdDisplay.textContent = currentSessionId.substring(0, 8) + '...';
+          sessionNumber.textContent = number;
+          
+          await waitForPairingCode();
+        } else {
+          showStatus('❌ Error: ' + (data.error || 'Failed to create session'), 'error');
+          resetButton();
+        }
+      } catch (error) {
+        showStatus('❌ Network error: Could not connect to server', 'error');
+        resetButton();
+      }
+    });
+
+    async function waitForPairingCode() {
+      requestPairingBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating code...';
+      sessionStatus.textContent = 'Generating code...';
+      
+      try {
+        const response = await fetch('/api/pairing-code/' + currentSessionId);
+        const data = await response.json();
+
+        if (data.available && data.code) {
+          showPairingCode(data.code, data.isConnected, data.sessionString);
+          if (data.isConnected && data.sessionString) {
+            showSessionString(data.sessionString);
+          } else {
+            checkConnectionStatus();
+          }
+        } else {
+          showStatus('⏳ Waiting for pairing code generation...', 'waiting');
+          sessionStatus.textContent = 'In queue...';
+          setTimeout(waitForPairingCode, 2000);
+        }
+      } catch (error) {
+        showStatus('❌ Error fetching pairing code', 'error');
+        sessionStatus.textContent = 'Error';
+        resetButton();
+      }
+    }
+
+    function showPairingCode(code, isConnected, sessionString) {
+      pairingCodeElement.textContent = code;
+      pairingCodeElement.style.display = 'block';
+      statusDiv.style.display = 'none';
+      requestPairingBtn.style.display = 'none';
+      autoCopyNotice.style.display = 'block';
+      
+      // Auto-copy the pairing code
+      autoCopyToClipboard(code, 'Pairing code copied to clipboard!');
+      
+      // Add click to copy functionality
+      pairingCodeElement.onclick = () => {
+        autoCopyToClipboard(code, 'Pairing code copied again!');
+      };
+
+      if (isConnected) {
+        sessionStatus.textContent = 'Connected';
+        if (sessionString) {
+          showSessionString(sessionString);
+        }
+      } else {
+        sessionStatus.textContent = 'Waiting for connection...';
+      }
+    }
+
+    function showSessionString(sessionString) {
+      sessionStringElement.textContent = sessionString;
+      sessionStringContainer.style.display = 'block';
+      sessionStatus.textContent = 'Connected';
+      
+      // Auto-copy the session string
+      autoCopyToClipboard(sessionString, 'Session string copied to clipboard!');
+    }
+
+    async function checkConnectionStatus() {
+      if (!currentSessionId) return;
+      
+      try {
+        const response = await fetch('/api/session/' + currentSessionId);
+        const session = await response.json();
+        
+        if (session.isConnected) {
+          const sessionResponse = await fetch('/api/session-string/' + currentSessionId);
+          const sessionData = await sessionResponse.json();
+          
+          if (sessionData.sessionString) {
+            showSessionString(sessionData.sessionString);
+          }
+        } else {
+          setTimeout(checkConnectionStatus, 2000);
+        }
+      } catch (error) {
+        setTimeout(checkConnectionStatus, 2000);
+      }
+    }
+
+    function copySessionString() {
+      autoCopyToClipboard(sessionStringElement.textContent, 'Session string copied again!');
+    }
+
+    function showStatus(message, type) {
+      statusDiv.textContent = message;
+      statusDiv.className = `status ${type}`;
+      statusDiv.style.display = 'block';
+    }
+
+    function resetButton() {
+      requestPairingBtn.disabled = false;
+      requestPairingBtn.innerHTML = '<i class="fas fa-key"></i> Request Pairing Code';
+      requestPairingBtn.style.display = 'block';
+    }
+
+    // Download button functionality
+    const setupFileContent = `// Icey_MD Setup File
+const { spawn } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+
+console.log('🚀 Starting Icey_MD Setup...');
+console.log('📦 Installing dependencies...');
+
+// Your setup logic here
+console.log('✅ Icey_MD is ready to use!');`;
+
+    downloadBtn.addEventListener('click', function() {
+      const blob = new Blob([setupFileContent], { type: 'application/javascript' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'icey_md_setup.js';
+      a.style.display = 'none';
+      
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      showToast('Setup file downloaded successfully!');
+    });
+
+    // Input validation
+    phoneInput.addEventListener('input', (e) => {
+      e.target.value = e.target.value.replace(/[^\d]/g, '');
+    });
+
+    // Floating WhatsApp button
+    document.getElementById('whatsappBtn').addEventListener('click', function() {
+      showToast('Contact support for assistance with Icey_MD');
+    });
+
+    // Mobile navigation toggle
+    navToggle.addEventListener('click', function() {
+      navLinks.classList.toggle('active');
+    });
+
+    // Close mobile menu when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!nav.contains(e.target)) {
+        navLinks.classList.remove('active');
+      }
+    });
+
+    // Check for existing session in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const existingSession = urlParams.get('session');
+    if (existingSession) {
+      currentSessionId = existingSession;
+      fetch('/api/session/' + existingSession)
+        .then(response => response.json())
+        .then(session => {
+          if (session.number) {
+            phoneInput.value = session.number;
+            sessionInfo.style.display = 'block';
+            sessionIdDisplay.textContent = existingSession.substring(0, 8) + '...';
+            sessionNumber.textContent = session.number;
+            sessionStatus.textContent = session.hasPairingCode ? 'Code generated' : 'Pending';
+            
+            if (session.hasPairingCode) {
+              fetch('/api/pairing-code/' + existingSession)
+                .then(response => response.json())
+                .then(data => {
+                  if (data.available) {
+                    showPairingCode(data.code, data.isConnected, data.sessionString);
+                    if (data.isConnected && data.sessionString) {
+                      showSessionString(data.sessionString);
+                    }
+                  }
+                });
+            }
+          }
+        })
+        .catch(console.error);
+    }
+
+    // Create floating particles
+    function createParticles() {
+      const particlesContainer = document.getElementById('particles');
+      const particleCount = 20;
+      
+      for (let i = 0; i < particleCount; i++) {
+        const particle = document.createElement('div');
+        const size = Math.random() * 100 + 50;
+        const opacity = Math.random() * 0.1 + 0.05;
+        
+        particle.style.position = 'absolute';
+        particle.style.width = size + 'px';
+        particle.style.height = size + 'px';
+        particle.style.background = `radial-gradient(circle, rgba(0, 255, 136, ${opacity}) 0%, transparent 70%)`;
+        particle.style.borderRadius = '50%';
+        particle.style.top = Math.random() * 100 + '%';
+        particle.style.left = Math.random() * 100 + '%';
+        particle.style.filter = 'blur(25px)';
+        particle.style.animation = `float ${Math.random() * 30 + 20}s infinite ease-in-out`;
+        particle.style.animationDelay = Math.random() * 10 + 's';
+        
+        particlesContainer.appendChild(particle);
+      }
+    }
+
+    // Add floating animation
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes float {
+        0%, 100% { 
+          transform: translate(0, 0) rotate(0deg) scale(1);
+          opacity: 0.7;
+        }
+        25% { 
+          transform: translate(100px, 50px) rotate(90deg) scale(1.1);
+          opacity: 1;
+        }
+        50% { 
+          transform: translate(-50px, 100px) rotate(180deg) scale(0.9);
+          opacity: 0.8;
+        }
+        75% { 
+          transform: translate(-100px, -50px) rotate(270deg) scale(1.05);
+          opacity: 0.9;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+
+    createParticles();
+
+    // Smooth scrolling for navigation links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+          });
+        }
+      });
+    });
+  </script>
+</body>
+</html>

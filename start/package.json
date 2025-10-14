@@ -1,0 +1,31 @@
+{
+  "name": "icey-md-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "A beautiful multi-user WhatsApp bot with glassy dark interface",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "multi-user",
+    "baileys",
+    "automation"
+  ],
+  "author": "Icey_MD",
+  "license": "MIT",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.4.0",
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2",
+    "chalk": "^4.1.2",
+    "cors": "^2.8.5",
+    "archiver": "^5.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
