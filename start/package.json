@@ -1,31 +1,26 @@
 {
-  "name": "icey-md-whatsapp-bot",
+  "name": "icey-md-session-server",
   "version": "1.0.0",
-  "description": "A beautiful multi-user WhatsApp bot with glassy dark interface",
   "type": "module",
+  "description": "Multi-session WhatsApp bot server",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "node index.js",
+    "test": "echo \"No tests specified\" && exit 0"
   },
-  "keywords": [
-    "whatsapp",
-    "bot",
-    "multi-user",
-    "baileys",
-    "automation"
-  ],
-  "author": "Icey_MD",
+  "keywords": ["whatsapp", "bot", "multi-session"],
+  "author": "Your Name",
   "license": "MIT",
   "dependencies": {
     "@whiskeysockets/baileys": "^6.4.0",
     "express": "^4.18.2",
-    "socket.io": "^4.7.2",
-    "chalk": "^4.1.2",
     "cors": "^2.8.5",
-    "archiver": "^5.3.1"
+    "chalk": "^4.1.2",
+    "archiver": "^5.3.1",
+    "socket.io": "^4.7.2"
   },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
