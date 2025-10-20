@@ -138,60 +138,107 @@ function keepBotsAlive() {
   }, 60000); // Check every minute
 }
 
-// ==================== UPTIME MONITORING ====================
-class UptimeMonitor {
+// ==================== 1-MINUTE SELF PINGER ====================
+class SelfPinger {
   constructor() {
     this.appUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
-    this.isMonitoring = false;
+    this.isPinging = false;
+    this.pingInterval = null;
+    this.pingCount = 0;
   }
 
   start() {
-    if (this.isMonitoring) return;
+    if (this.isPinging) return;
     
-    console.log(chalk.blue(`🔔 Starting uptime monitor for: ${this.appUrl}`));
+    console.log(chalk.blue('🔔 Starting 1-minute self-pinger...'));
+    console.log(chalk.blue(`🌐 Target URL: ${this.appUrl}`));
     
-    // Ping immediately
-    this.ping();
+    // Start pinging immediately
+    this.pingSelf();
     
-    // Ping every 4 minutes (less than 5-minute timeout)
-    this.interval = setInterval(() => this.ping(), 4 * 60 * 1000);
+    // Ping every 1 minute (60 seconds) to keep Render awake
+    this.pingInterval = setInterval(() => this.pingSelf(), 60 * 1000);
     
-    this.isMonitoring = true;
+    this.isPinging = true;
   }
 
   stop() {
-    if (this.interval) {
-      clearInterval(this.interval);
-      this.isMonitoring = false;
-      console.log(chalk.yellow('🔔 Uptime monitor stopped'));
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.isPinging = false;
+      console.log(chalk.yellow('🔔 Self-pinger stopped'));
     }
   }
 
-  async ping() {
+  async pingSelf() {
+    this.pingCount++;
+    const pingId = this.pingCount;
+    const timestamp = new Date().toLocaleTimeString();
+
+    // Always try to ping, even if not on Render (for testing)
     try {
-      const endpoints = ['/api/health', '/api/stats', '/'];
+      const endpoints = [
+        '/ping', 
+        '/health', 
+        '/api/health', 
+        '/api/stats',
+        '/status'
+      ];
+      
+      let successCount = 0;
+      let totalCount = 0;
       
       for (const endpoint of endpoints) {
+        totalCount++;
         try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
+          
+          const startTime = Date.now();
           const response = await fetch(`${this.appUrl}${endpoint}`, {
-            signal: AbortSignal.timeout(10000) // 10 second timeout
+            signal: controller.signal,
+            headers: {
+              'User-Agent': 'IceyMD-SelfPinger/1.0',
+              'X-Ping-ID': pingId.toString()
+            }
           });
-          console.log(chalk.green(`✅ Ping ${endpoint}: ${response.status}`));
+          
+          clearTimeout(timeoutId);
+          const responseTime = Date.now() - startTime;
+          
+          if (response.ok) {
+            successCount++;
+            console.log(chalk.green(`🔔 [${timestamp}] Ping #${pingId} ${endpoint}: ✅ OK (${responseTime}ms)`));
+          } else {
+            console.log(chalk.yellow(`🔔 [${timestamp}] Ping #${pingId} ${endpoint}: ⚠️ ${response.status} (${responseTime}ms)`));
+          }
         } catch (error) {
-          console.log(chalk.yellow(`⚠️ Ping ${endpoint} failed: ${error.message}`));
+          if (error.name === 'AbortError') {
+            console.log(chalk.red(`🔔 [${timestamp}] Ping #${pingId} ${endpoint}: ❌ Timeout`));
+          } else {
+            console.log(chalk.red(`🔔 [${timestamp}] Ping #${pingId} ${endpoint}: ❌ ${error.message}`));
+          }
         }
         
-        // Small delay between pings
+        // Small delay between pings (1 second)
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
+      
+      // Summary
+      if (successCount === totalCount) {
+        console.log(chalk.green(`🔔 [${timestamp}] Ping #${pingId} Summary: ✅ All endpoints successful (${successCount}/${totalCount})`));
+      } else {
+        console.log(chalk.yellow(`🔔 [${timestamp}] Ping #${pingId} Summary: ⚠️ Partial success (${successCount}/${totalCount})`));
+      }
+      
     } catch (error) {
-      console.log(chalk.red(`❌ Uptime monitor error: ${error.message}`));
+      console.log(chalk.red(`🔔 [${timestamp}] Ping #${pingId} Error: ${error.message}`));
     }
   }
 }
 
-// Initialize monitor
-const uptimeMonitor = new UptimeMonitor();
+// Initialize self-pinger
+const selfPinger = new SelfPinger();
 
 // ==================== HEALTH ENDPOINTS ====================
 app.get('/api/health', (req, res) => {
@@ -216,8 +263,71 @@ app.get('/', (req, res) => {
   res.json({ 
     message: 'Icey-MD Bot Server is running',
     version: '1.0.0',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
   });
+});
+
+// Simple ping endpoint for self-pinger
+app.get('/ping', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    pingId: req.headers['x-ping-id'] || 'unknown'
+  });
+});
+
+// Health endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    server: 'Icey-MD Bot Server'
+  });
+});
+
+// Status page endpoint
+app.get('/status', (req, res) => {
+  const activeSessions = Array.from(userSessions.values()).filter(
+    session => Date.now() - session.createdAt < PENDING_EXPIRY
+  );
+
+  res.json({
+    status: 'operational',
+    server: {
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      timestamp: new Date().toISOString()
+    },
+    sessions: {
+      total: activeSessions.length,
+      connected: activeSessions.filter(s => s.isConnected).length,
+      activeBots: activeBotProcesses.size
+    },
+    monitoring: {
+      selfPinger: selfPinger.isPinging ? 'active' : 'inactive',
+      pingCount: selfPinger.pingCount
+    }
+  });
+});
+
+// Uptime robot compatible endpoint
+app.get('/uptime', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    time: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
+// Simple text response for basic monitoring
+app.get('/healthz', (req, res) => {
+  res.send('OK');
+});
+
+app.get('/readyz', (req, res) => {
+  res.send('OK');
 });
 
 // Function to export credentials as session string
@@ -742,7 +852,11 @@ app.get('/api/stats', (req, res) => {
     codesGenerated: totalCodesGenerated,
     connectedSessions: activeSessions.filter(s => s.isConnected).length,
     activeBots: activeBotProcesses.size,
-    rateLimitTimeout: '120s'
+    rateLimitTimeout: '120s',
+    selfPinger: {
+      active: selfPinger.isPinging,
+      pingCount: selfPinger.pingCount
+    }
   });
 });
 
@@ -1185,34 +1299,41 @@ function ensureBotFolderStructure() {
   return true;
 }
 
-// ==================== START SERVER WITH ALL MONITORS ====================
+// ==================== START SERVER WITH 1-MINUTE SELF PINGER ====================
 server.listen(PORT, async () => {
   console.log(chalk.green(`🚀 Icey_MD Multi-Session Server started!`));
   console.log(chalk.blue(`🌐 Web interface: http://localhost:${PORT}`));
   console.log(chalk.blue(`🔌 Socket.io server running`));
   console.log(chalk.blue(`🤖 Multi-user bot system ready`));
-  console.log(chalk.yellow(`💡 515 error handling: Enabled (automatic restart after pairing)`));
+  console.log(chalk.yellow(`🔔 1-minute self-pinger: Enabled`));
   
   const structureOk = ensureBotFolderStructure();
   if (!structureOk) {
     console.log(chalk.red('❌ Please check your folder structure and try again'));
   }
   
-  // Start all monitors
+  // ==================== START ALL MONITORS ====================
+  // Auto-start existing sessions first
   await autoStartExistingSessions();
+  
+  // Start bot keep-alive monitor
   keepBotsAlive();
   
-  if (process.env.RENDER || process.env.RENDER_EXTERNAL_URL) {
-    console.log(chalk.blue('🚀 Render environment detected - starting uptime monitor'));
-    setTimeout(() => uptimeMonitor.start(), 30000);
-  }
+  // Start 1-minute self-pinger (always run)
+  console.log(chalk.blue('🚀 Starting 1-minute self-pinger...'));
+  setTimeout(() => {
+    selfPinger.start();
+    console.log(chalk.green('✅ 1-minute self-pinger started successfully!'));
+    console.log(chalk.yellow('💡 Server will now stay awake with 1-minute pings'));
+  }, 10000);
   
-  console.log(chalk.green('✅ All monitors started successfully!'));
+  console.log(chalk.green('✅ All systems started successfully!'));
 });
 
+// Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\n🛑 Shutting down gracefully...');
-  uptimeMonitor.stop();
+  selfPinger.stop();
   
   for (const [sessionId, process] of activeBotProcesses.entries()) {
     try {
