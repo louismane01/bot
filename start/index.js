@@ -487,18 +487,59 @@ async function autoStartExistingSessions() {
     
     console.log(chalk.blue(`📁 Found ${sessionFolders.length} existing session folders`));
     
+    let startedCount = 0;
+    
     for (const sessionId of sessionFolders) {
       try {
         const sessionFolder = path.join(sessionsDir, sessionId);
-        const credsFile = path.join(sessionFolder, 'creds.json');
         
-        if (fs.existsSync(credsFile)) {
+        // Check if session has valid credentials
+        const hasValidSession = () => {
+          try {
+            const files = fs.readdirSync(sessionFolder);
+            
+            // Check for creds.json
+            const credsFile = path.join(sessionFolder, 'creds.json');
+            if (fs.existsSync(credsFile)) {
+              const credsData = fs.readFileSync(credsFile, 'utf8');
+              const creds = JSON.parse(credsData);
+              
+              // Check if creds have necessary data
+              if (creds && (creds.noiseKey || creds.signedIdentityKey || creds.encKey || creds.me)) {
+                return true;
+              }
+            }
+            
+            // Check for app-state files
+            const appStateFiles = files.filter(file => file.startsWith('app-state-sync'));
+            if (appStateFiles.length > 0) {
+              return true;
+            }
+            
+            // Check for any session files
+            const hasSessionFiles = files.some(file => 
+              file.includes('pre-key') || 
+              file.includes('session') || 
+              file.includes('sender-key') ||
+              file.includes('storage')
+            );
+            
+            return hasSessionFiles;
+            
+          } catch (error) {
+            console.error(chalk.red(`❌ Error checking session ${sessionId}:`), error);
+            return false;
+          }
+        };
+
+        if (hasValidSession()) {
           console.log(chalk.blue(`🔄 Auto-starting existing session: ${sessionId}`));
           
-          // Create session entry if it doesn't exist
-          if (!userSessions.has(sessionId)) {
+          // Create or update session entry
+          const existingSession = userSessions.get(sessionId);
+          if (!existingSession) {
             userSessions.set(sessionId, {
-              number: 'auto-started',
+              number: 'existing-session',
               sessionId,
               sessionName: generateSessionName(sessionId),
               createdAt: Date.now(),
@@ -506,26 +547,38 @@ async function autoStartExistingSessions() {
               pairingCode: null,
               codeGeneratedAt: null,
               sessionString: null,
-              isConnected: true, // Mark as connected since we have session data
+              isConnected: true,
               botConnected: false,
               botProcessStarted: false,
-              botWasConnected: true, // Assume it was connected before
+              botWasConnected: true,
               status: 'auto_started',
               authDir: sessionFolder,
               connectionAttempts: 0,
               maxConnectionAttempts: 3
             });
+            totalUsers++;
           }
           
           // Start bot process for this session
           await startBotProcess(sessionId, generateSessionName(sessionId));
+          startedCount++;
+        } else {
+          console.log(chalk.yellow(`⚠️ Skipping invalid session folder: ${sessionId}`));
+          
+          // Clean up invalid session folder
+          try {
+            fs.rmSync(sessionFolder, { recursive: true, force: true });
+            console.log(chalk.gray(`🧹 Cleaned up invalid session: ${sessionId}`));
+          } catch (cleanupError) {
+            console.error(chalk.red(`❌ Error cleaning up invalid session ${sessionId}:`), cleanupError);
+          }
         }
       } catch (error) {
-        console.error(chalk.red(`❌ Failed to auto-start session ${sessionId}:`), error);
+        console.error(chalk.red(`❌ Failed to process session ${sessionId}:`), error);
       }
     }
     
-    console.log(chalk.green(`✅ Auto-started ${sessionFolders.length} existing sessions`));
+    console.log(chalk.green(`✅ Auto-started ${startedCount} existing sessions`));
   } catch (error) {
     console.error(chalk.red('❌ Error scanning sessions directory:'), error);
   }
@@ -750,7 +803,7 @@ app.get('/api/auth-folder/:sessionId', (req, res) => {
   archive.finalize();
 });
 
-// FIXED: WhatsApp connection with proper 515 error handling
+// WhatsApp connection function
 async function startWhatsAppConnection(sessionId) {
   const session = userSessions.get(sessionId);
   if (!session) return;
@@ -788,7 +841,6 @@ async function startWhatsAppConnection(sessionId) {
       linkPreviewImageThumbnailWidth: 192,
       generateHighQualityLinkPreview: true,
       shouldIgnoreJid: jid => jid.endsWith('@broadcast'),
-      // Additional options for better stability
       markOnlineOnConnect: false,
       emitOwnPresenceUpdate: false,
       defaultQueryTimeoutMs: 60000,
@@ -831,7 +883,6 @@ async function startWhatsAppConnection(sessionId) {
             await new Promise(resolve => setTimeout(resolve, 2000));
             
             if (sock.ws && sock.ws.readyState === sock.ws.OPEN) {
-              // Send session ID first
               await sock.sendMessage(sock.user.id, {
                 text: `🎉 *WhatsApp Connected Successfully!*\n\n🤖 Your bot is starting...\n🆔 Session: ${sessionId}\n🏷️ Name: ${session.sessionName}\n\n⏳ Please wait for bot initialization...`
               });
@@ -842,10 +893,7 @@ async function startWhatsAppConnection(sessionId) {
             console.error('Failed to send welcome message:', e);
           }
 
-          // For 515 error handling - don't disconnect immediately
-          console.log(chalk.blue('🔄 Keeping connection alive for pairing completion...'));
-          
-          // Wait longer before disconnecting to ensure pairing is complete
+          // Wait before disconnecting
           setTimeout(() => {
             try {
               console.log(chalk.yellow('🔌 Safely disconnecting pairing socket...'));
@@ -855,7 +903,7 @@ async function startWhatsAppConnection(sessionId) {
             } catch (e) {
               console.error('Error disconnecting:', e);
             }
-          }, 8000); // Increased to 8 seconds
+          }, 8000);
         }
       }
       
@@ -869,13 +917,10 @@ async function startWhatsAppConnection(sessionId) {
           console.log(chalk.blue('🔄 515 Error: Restart required after pairing - this is normal'));
           restartRequired = true;
           
-          // Don't mark as error - this is expected behavior
           if (isPaired) {
             console.log(chalk.green('✅ Pairing was successful before restart'));
-            // Session is already marked as completed, no need to change status
           } else {
             console.log(chalk.yellow('⚠️ Pairing may not have completed before restart'));
-            // Try to restart the connection
             setTimeout(() => {
               restartConnectionAfterPairing(sessionId, authDir);
             }, 3000);
@@ -907,7 +952,6 @@ async function startWhatsAppConnection(sessionId) {
           
         } else {
           console.log(chalk.yellow(`⚠️ Unknown disconnect reason: ${reason}`));
-          // For other errors, try to reconnect
           session.connectionAttempts = (session.connectionAttempts || 0) + 1;
           
           if (session.connectionAttempts < session.maxConnectionAttempts) {
@@ -924,21 +968,17 @@ async function startWhatsAppConnection(sessionId) {
         }
       }
       
-      // Handle connecting state
       if (connection === 'connecting') {
         console.log(chalk.blue('🔄 Connecting to WhatsApp...'));
       }
       
-      // Handle QR code if generated (fallback)
       if (qr) {
         console.log(chalk.blue('📱 QR Code generated (fallback)'));
       }
     });
 
-    // Wait for connection to stabilize
     await new Promise(resolve => setTimeout(resolve, 3000));
 
-    // Request pairing code with better error handling
     console.log(chalk.blue(`🔐 Requesting pairing code for ${session.number}`));
     
     try {
@@ -954,9 +994,8 @@ async function startWhatsAppConnection(sessionId) {
 
       updateSocketStats();
 
-      // Wait for pairing to complete with better handling
       let pairingWaitTime = 0;
-      const maxPairingTime = 300000; // 5 minutes
+      const maxPairingTime = 300000;
       
       while (pairingWaitTime < maxPairingTime) {
         if (isPaired || restartRequired) {
@@ -972,7 +1011,6 @@ async function startWhatsAppConnection(sessionId) {
         await new Promise(resolve => setTimeout(resolve, 2000));
         pairingWaitTime += 2000;
         
-        // Show progress every 30 seconds
         if (pairingWaitTime % 30000 === 0) {
           console.log(chalk.blue(`⏰ Still waiting for pairing... (${pairingWaitTime/1000}s)`));
         }
@@ -1022,7 +1060,7 @@ async function startWhatsAppConnection(sessionId) {
   }
 }
 
-// FIXED: Restart connection after pairing for 515 error
+// Restart connection after pairing for 515 error
 async function restartConnectionAfterPairing(sessionId, authDir) {
   const session = userSessions.get(sessionId);
   if (!session) return;
@@ -1060,7 +1098,6 @@ async function restartConnectionAfterPairing(sessionId, authDir) {
         if (newSock.authState.creds.registered) {
           console.log(chalk.green('🔐 Successfully authenticated after restart!'));
           
-          // Export session string if not already done
           if (!session.sessionString) {
             const sessionString = exportSessionString(newSock.authState.creds);
             if (sessionString) {
@@ -1069,12 +1106,10 @@ async function restartConnectionAfterPairing(sessionId, authDir) {
               session.status = 'completed';
               console.log(chalk.green(`💫 Session string exported after restart`));
               
-              // Start bot process
               await startBotProcess(sessionId, session.sessionName);
             }
           }
           
-          // Send confirmation message
           try {
             await new Promise(resolve => setTimeout(resolve, 1000));
             
@@ -1088,7 +1123,6 @@ async function restartConnectionAfterPairing(sessionId, authDir) {
             console.error('Failed to send restart message:', e);
           }
           
-          // Close connection after confirmation
           setTimeout(() => {
             try {
               console.log(chalk.yellow('🔌 Closing restart connection...'));
@@ -1105,7 +1139,6 @@ async function restartConnectionAfterPairing(sessionId, authDir) {
 
   } catch (error) {
     console.error(chalk.red('❌ Error in restart connection:'), error);
-    // Even if restart fails, the session might still be valid
     if (!session.isConnected) {
       session.status = 'error';
       session.error = 'Failed to restart connection after pairing';
@@ -1165,14 +1198,10 @@ server.listen(PORT, async () => {
     console.log(chalk.red('❌ Please check your folder structure and try again'));
   }
   
-  // ==================== START ALL MONITORS ====================
-  // Auto-start existing sessions first
+  // Start all monitors
   await autoStartExistingSessions();
-  
-  // Start bot keep-alive monitor
   keepBotsAlive();
   
-  // Start uptime monitor (only on Render)
   if (process.env.RENDER || process.env.RENDER_EXTERNAL_URL) {
     console.log(chalk.blue('🚀 Render environment detected - starting uptime monitor'));
     setTimeout(() => uptimeMonitor.start(), 30000);
@@ -1183,8 +1212,6 @@ server.listen(PORT, async () => {
 
 process.on('SIGINT', async () => {
   console.log('\n🛑 Shutting down gracefully...');
-  
-  // Stop uptime monitor
   uptimeMonitor.stop();
   
   for (const [sessionId, process] of activeBotProcesses.entries()) {
