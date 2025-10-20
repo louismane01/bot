@@ -52,7 +52,6 @@ console.log(chalk.blue(`⚡ Auto Start: ${AUTO_START}`));
 
 // === MODIFIED: Function to get session folder path ===
 function getSessionFolderPath() {
-  // For multi-session support, use sessions folder
   const sessionsDir = path.join(__dirname, 'sessions');
   if (!fs.existsSync(sessionsDir)) {
     fs.mkdirSync(sessionsDir, { recursive: true });
@@ -60,7 +59,7 @@ function getSessionFolderPath() {
   return path.join(sessionsDir, SESSION_ID);
 }
 
-// === NEW: Check if session folder exists and has valid credentials ===
+// === IMPROVED: Session validation function ===
 function hasValidSession(sessionFolderPath) {
   if (!fs.existsSync(sessionFolderPath)) {
     console.log(chalk.yellow(`❌ Session folder not found: ${sessionFolderPath}`));
@@ -69,40 +68,68 @@ function hasValidSession(sessionFolderPath) {
   
   try {
     const files = fs.readdirSync(sessionFolderPath);
-    console.log(chalk.blue(`📁 Session files: ${files.join(', ')}`));
-    
-    const hasCreds = files.some(file => file.includes('creds'));
-    const hasAppState = files.some(file => file.includes('app-state'));
-    const hasAnyFiles = files.length > 0;
-    
-    if (!hasCreds && !hasAppState && !hasAnyFiles) {
-      console.log(chalk.yellow('⚠️ Session folder exists but no credentials found'));
+    if (files.length === 0) {
+      console.log(chalk.yellow('⚠️ Session folder is empty'));
       return false;
     }
     
-    // Check if creds file has valid data
-    if (hasCreds) {
-      const credsFile = files.find(file => file.includes('creds'));
-      const credsPath = path.join(sessionFolderPath, credsFile);
+    console.log(chalk.blue(`📁 Session files: ${files.join(', ')}`));
+    
+    // Check for creds.json
+    const credsFile = path.join(sessionFolderPath, 'creds.json');
+    if (fs.existsSync(credsFile)) {
       try {
-        const credsData = fs.readFileSync(credsPath, 'utf8');
+        const credsData = fs.readFileSync(credsFile, 'utf8');
         const creds = JSON.parse(credsData);
         
-        if (!creds.noiseKey && !creds.signedIdentityKey && !creds.encKey) {
+        const hasValidCreds = (
+          creds && 
+          (
+            creds.noiseKey || 
+            creds.signedIdentityKey || 
+            creds.encKey || 
+            creds.me ||
+            creds.registration ||
+            creds.clientID
+          )
+        );
+        
+        if (hasValidCreds) {
+          console.log(chalk.green('✅ Valid session credentials found'));
+          return true;
+        } else {
           console.log(chalk.yellow('⚠️ Session credentials are incomplete'));
           return false;
         }
-        
-        console.log(chalk.green('✅ Valid session credentials found'));
-        return true;
       } catch (parseError) {
         console.log(chalk.yellow('⚠️ Could not parse credentials file'));
         return false;
       }
     }
     
-    console.log(chalk.green('✅ Session folder has valid files'));
-    return true;
+    // Check for app-state files
+    const appStateFiles = files.filter(file => file.startsWith('app-state-sync'));
+    if (appStateFiles.length > 0) {
+      console.log(chalk.green('✅ App state files found'));
+      return true;
+    }
+    
+    // Check for any other session files
+    const hasSessionFiles = files.some(file => 
+      file.includes('pre-key') || 
+      file.includes('session') || 
+      file.includes('sender-key') ||
+      file.includes('storage')
+    );
+    
+    if (hasSessionFiles) {
+      console.log(chalk.green('✅ Session files found'));
+      return true;
+    }
+    
+    console.log(chalk.yellow('⚠️ No valid session files found'));
+    return false;
+    
   } catch (error) {
     console.log(chalk.red('❌ Error checking session validity:'), error.message);
     return false;
@@ -122,7 +149,7 @@ async function waitForSessionFolder(maxAttempts = 30) {
     }
     
     console.log(chalk.yellow(`⏳ Waiting for valid session folder... (${attempt}/${maxAttempts})`));
-    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+    await new Promise(resolve => setTimeout(resolve, 2000));
   }
   
   throw new Error('Valid session folder not available after maximum attempts');
@@ -153,33 +180,27 @@ async function reconnectBot() {
   console.log(chalk.yellow(`🔄 Attempting to reconnect... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`));
   
   try {
-    // Wait before reconnecting
     await new Promise(resolve => setTimeout(resolve, 5000));
-    
-    // Restart the bot
     await startBot();
     console.log(chalk.green('✅ Reconnection successful!'));
-    reconnectAttempts = 0; // Reset counter on successful reconnect
+    reconnectAttempts = 0;
     isReconnecting = false;
   } catch (error) {
     console.log(chalk.red(`❌ Reconnection attempt ${reconnectAttempts} failed:`), error.message);
-    
-    // Schedule next reconnection attempt
     setTimeout(() => {
       isReconnecting = false;
       reconnectBot();
-    }, 10000); // Wait 10 seconds before next attempt
+    }, 10000);
   }
 }
 
-// === MODIFIED: Start bot function with auto-reconnect ===
+// === MODIFIED: Start bot function with improved session handling ===
 async function startBot() {
   console.log(chalk.blue('🚀 Starting WhatsApp bot...'));
   
   let sessionFolderPath;
   
   if (AUTO_START) {
-    // Auto-start mode: wait for session folder to be available
     console.log(chalk.blue('⚡ Auto-start mode enabled'));
     try {
       sessionFolderPath = await waitForSessionFolder();
@@ -195,7 +216,6 @@ async function startBot() {
       }
     }
   } else {
-    // Manual mode: use existing session folder
     sessionFolderPath = getSessionFolderPath();
     if (!hasValidSession(sessionFolderPath)) {
       console.log(chalk.red('❌ No valid session folder available'));
@@ -217,7 +237,6 @@ async function startBot() {
     markOnlineOnConnect: true,
     generateHighQualityLinkPreview: true,
     syncFullHistory: false,
-    // Additional options for better stability
     connectTimeoutMs: 60000,
     keepAliveIntervalMs: 10000,
     retryRequestDelayMs: 250,
@@ -240,15 +259,12 @@ async function startBot() {
       console.log(chalk.blue(`🆔 Session: ${SESSION_ID}`));
       console.log(chalk.blue(`📞 Phone: ${sock.user?.id || 'Unknown'}`));
 
-      // Reset reconnect attempts on successful connection
       reconnectAttempts = 0;
       isReconnecting = false;
 
-      // Store bot owner automatically (the bot itself)
       globalThis.botOwner = sock.user.id;
       console.log(chalk.blue('👑 Bot owner set to:'), globalThis.botOwner);
 
-      // Now load commands after successful connection
       await loadCommands();
 
       const welcomeCaption = `
@@ -267,11 +283,9 @@ async function startBot() {
 💫 Powered by *Icey_MD Multi-Session System*
 `;
 
-      // Load scheduled messages
       loadScheduledMessages(sock);
 
       try {
-        // Try to send welcome message with image
         const imagePath = "./media/icey.jpg";
         if (fs.existsSync(imagePath)) {
           await sock.sendMessage(sock.user.id, {
@@ -280,13 +294,11 @@ async function startBot() {
           });
           console.log(chalk.green('✅ Welcome message with image sent!'));
         } else {
-          // Fallback to text-only welcome message
           await sock.sendMessage(sock.user.id, { text: welcomeCaption });
           console.log(chalk.green('✅ Welcome message sent!'));
         }
       } catch (e) {
         console.error('Failed to send welcome message:', e);
-        // Final fallback - just log it
         console.log(chalk.green('✅ Bot connected successfully!'));
       }
     }
@@ -301,7 +313,6 @@ async function startBot() {
         console.log(chalk.red('❌ Logged out from WhatsApp.'));
         console.log(chalk.blue('💡 The user may have logged out from Linked Devices'));
         
-        // Clean up session folder on logout
         try {
           if (fs.existsSync(sessionFolderPath)) {
             fs.rmSync(sessionFolderPath, { recursive: true, force: true });
@@ -311,15 +322,12 @@ async function startBot() {
           console.error('Error cleaning up session folder:', cleanupError);
         }
         
-        // Don't attempt to reconnect if logged out
         console.log(chalk.yellow('💡 Session terminated. Please create a new session.'));
         return;
       } 
       
-      // For other disconnection reasons, attempt to reconnect
       console.log(chalk.yellow('⚠️ Unexpected disconnect, attempting to reconnect...'));
       
-      // Reset connection state before reconnecting
       if (sock.ws) {
         try {
           sock.ws.close();
@@ -328,25 +336,21 @@ async function startBot() {
         }
       }
       
-      // Start reconnection process
       setTimeout(() => {
         reconnectBot();
       }, 3000);
     }
     
-    // Handle connecting state
     if (connection === 'connecting') {
       console.log(chalk.blue('🔄 Connecting to WhatsApp...'));
     }
   });
 
-  // Load welcome monitor
   welcomeMonitor(sock);
 
-  // Load commands function
   async function loadCommands() {
     console.log(chalk.blue('📂 Loading commands...'));
-    commands.clear(); // Clear existing commands
+    commands.clear();
     
     const commandsDir = path.join(__dirname, 'commands');
     
@@ -364,7 +368,6 @@ async function startBot() {
             console.log(chalk.green(`✅ Loaded command: .${cmdModule.command}`));
           }
           
-          // Load monitor if available
           if (cmdModule.monitor) {
             cmdModule.monitor(sock);
             console.log(chalk.blue(`👀 Loaded monitor for: ${file}`));
@@ -377,10 +380,8 @@ async function startBot() {
     console.log(chalk.green(`✅ Total commands loaded: ${commands.size}`));
   }
   
-  // 🔥 Make reload available everywhere
   globalThis.reloadCommands = loadCommands;
 
-  // Message processing handler
   sock.ev.on('messages.upsert', async ({ messages }) => {
     for (const m of messages) {
       try {
@@ -395,14 +396,12 @@ async function startBot() {
         else if (msg.videoMessage?.caption) text = msg.videoMessage.caption;
         else if (msg.documentMessage?.caption) text = msg.documentMessage.caption;
 
-        // Add session info to command logging
         if (text && text.startsWith('.')) {
           const cmdName = text.slice(1).split(' ')[0].toLowerCase();
           const sender = m.key.participant || m.key.remoteJid;
           console.log(chalk.blue(`[${SESSION_ID}] Command: .${cmdName} from ${sender}`));
         }
 
-        // Direct commands
         if (text.startsWith('.welcome')) return await welcomeExecute(sock, m);
         if (text.startsWith('.goodbye')) return await goodbyeExecute(sock, m);
         if (text.startsWith('.welcomesettings')) return await settingsExecute(sock, m);
@@ -467,14 +466,13 @@ Only the owner can use commands.
   return sock;
 }
 
-// Create commands folder if missing
+// Create necessary directories
 const commandsDir = path.join(__dirname, 'commands');
 if (!fs.existsSync(commandsDir)) {
   fs.mkdirSync(commandsDir, { recursive: true });
   console.log(chalk.blue('📁 Created commands folder'));
 }
 
-// Create sessions directory for multi-session support
 const sessionsDir = path.join(__dirname, 'sessions');
 if (!fs.existsSync(sessionsDir)) {
   fs.mkdirSync(sessionsDir, { recursive: true });
@@ -490,7 +488,6 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error(`[${SESSION_ID}] Unhandled Rejection at:`, promise, 'reason:', reason);
 });
 
-// ✅ Fix for process signals
 process.on('SIGINT', () => {
   console.log(`\n[${SESSION_ID}] 🛑 Caught Ctrl+C, shutting down...`);
   process.exit(0);
@@ -505,7 +502,6 @@ process.on('SIGTERM', () => {
 startBot().catch(error => {
   console.error(`[${SESSION_ID}] ❌ Bot startup failed:`, error);
   
-  // In auto-start mode, try to restart after delay
   if (AUTO_START) {
     console.log(chalk.yellow(`[${SESSION_ID}] 🔄 Auto-restarting in 30 seconds...`));
     setTimeout(() => {
